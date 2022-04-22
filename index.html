@@ -1,0 +1,365 @@
+<html>
+    <head>
+
+    </head>
+    <style>
+        * {
+            background-color: lavender;
+            margin-left: 1em;
+        }
+        a {
+            margin-left: 0em;
+        }
+
+        #data-table {
+            margin-top: 2em;
+            border: 4px solid black;
+            table-layout: fixed;
+        }
+
+        th {
+            padding: .5em;
+        }
+
+        td {
+            border: 2px solid gray;
+            padding: .5em;
+        }
+        .td-width {    
+            width: 80px; 
+            height:50px;
+            max-width:80px;
+            min-width:80px; 
+            max-height:50px; 
+            min-height:50px;
+            overflow:auto;
+        }
+        .td-width-desc {    
+            width: 500px; 
+            height:50px;
+            max-width:500px;
+            min-width:500px; 
+            max-height:50px; 
+            min-height:50px;
+            overflow:auto;
+        }
+
+        #word-count-btn, #privacy-btn, #strangeChar-btn, #download-btn {
+            background-color: white;
+            color: black;
+        }
+    </style>
+    <body>
+        <h2>Google Play App Helper</h2>
+        <ul>
+            <li>To use, first upload an excel sheet that has the correct format. Click <a href="https://docs.google.com/document/d/1C8d9Z65-VLvvBzX8okEty2y_nvYy_2rVlOPP1EB605E/edit?usp=sharing">here</a> to learn how to do this.</li>
+            <li>Use the buttons on the right to make adjustments to the table</li>
+            <li>You can clear out non-readable characters, find the word count of the description, and pull out the privacy policy text</li>
+            <li>Then, click the download button to get an excel file back with the newly made data</li>
+        </ul>
+
+        <label for="excel-file">Upload a CSV file</label>
+        <input type="file" id="excel-file" onchange="loadExcelFile(this.files[0])">
+        <button id="strangeChar-btn" type="button" onclick="removeStrangeCharacters()">Remove Strange Letters</button>
+        <button id="word-count-btn" type="button" onclick="getWordCount()">Description Word Count</button>
+        <button id="privacy-btn" type="button" onclick="checkForPrivacy()">Check For Privacy</button>
+        <button id="download-btn" type="button" onclick="generateExcelSheet()">Download Excel Sheet</button>
+        <br>
+        <table id="data-table">
+            <tr id="header-row">
+                <th>App Name</th>
+                <th>Rating</th>
+                <th>Description</th>
+                <th>Image URL</th>
+                <th>Content Rating</th>
+                <th>Category</th>
+                <th>Age Rating</th>
+                <th>Price</th>
+            </tr>
+        </table>
+    </body>
+    <script>
+        var excelText = "";
+        var charCount = 0;
+        var headerText = "";
+        var appName = [];
+        var rating = [];
+        var desc = [];
+        var img = [];
+        var contentRating = [];
+        var category = [];
+        var ageRating = [];
+        var price = [];
+        var wordCount = [];
+        var privacy = [];
+
+        //Grabs the data from the excel sheet
+        async function loadExcelFile(file) {
+            excelText = await file.text();
+            buildTable();
+        }
+
+        //Creates the table of values for each column
+        function buildTable() {
+            charCount = 0;
+            //Go through and grab the heading text
+            while(true) {
+                if(excelText.charAt(charCount) == "\n" ) {
+                    charCount++;
+                    break;
+                }
+                headerText += excelText.charAt(charCount);
+                charCount++;
+            }
+            headerText = headerText.trim();
+            while(charCount < excelText.length) {
+                charCount = readData(appName, charCount);
+                charCount = readData(rating, charCount);
+                charCount = readData(desc, charCount);
+                charCount = readData(img, charCount);
+                charCount = readData(contentRating, charCount);
+                charCount = readData(category, charCount);
+                charCount = readData(ageRating, charCount);
+                charCount = readData(price, charCount);
+            }
+            console.log(excelText);
+            printToTable();
+        }
+        
+        //Function takes an array and adds all the characters prior to a comma that indicates the end of a cell
+        function readData(dataArray, index) {
+            var text = "";
+            if(dataArray == price && excelText.charAt(index) != "$") {
+                dataArray[dataArray.length] = "Free";
+                return index;
+            }
+            else if(dataArray == price && excelText.charAt(index) == "$") {
+                while(true) {
+                    var c = excelText.charAt(index);
+                    if(c == "0" || c == "1" || c == "2" || c == "3" || c == "4" || c == "5" || c == "6" || c == "7" || c == "8"
+                    || c == "9" || c == "." || c == "$") {
+                        text += excelText.charAt(index);
+                    }
+                    else {
+                        dataArray[dataArray.length] = text;
+                        return index;
+                    }
+                    index++;
+                }
+            }
+            else {
+                while(true) {
+                    if(newCell(dataArray, index)) {
+                        break;
+                    }
+                    else {
+                        text += excelText.charAt(index);
+                    }
+                    index++;
+                }
+                if(dataArray != rating) {
+                    dataArray[dataArray.length] = text;
+                }
+                else {
+                    //Want to just grab the numbers from here
+                    var numbers = "";
+                    for(let i = 0; i < text.length; i++) {
+                        if(text.charAt(i) == 0 || text.charAt(i) == 1 || text.charAt(i) == 2 || text.charAt(i) == 3 || text.charAt(i) == 4 || text.charAt(i) == 5
+                        || text.charAt(i) == 6 || text.charAt(i) == 7 || text.charAt(i) == 8 || text.charAt(i) == 9 || text.charAt(i) == ".") {
+                            numbers = numbers + text.charAt(i);
+                        }
+                    }
+                    dataArray[dataArray.length] = numbers;
+                }
+                return index+1; //Go over the comma
+            }
+        }
+
+        //This function will check to see if this is a new cell (Special cases are for description)
+        function newCell(dataArray, index) {
+            if(excelText.length <= index) {
+                return true;
+            }
+
+            else if(excelText.charAt(index) != ",") {
+                return false;
+            }
+            else if(excelText.charAt(index) == "," && dataArray == desc && excelText.charAt(index+1) == "h") {
+                if(excelText.charAt(index+2) == "t" && excelText.charAt(index+3) == "t") {
+                    return true;
+                }
+            }
+            else if(dataArray == desc) {
+                return false;
+            }
+            else if(excelText.charAt(index) == ","){
+                return true;
+            }
+        }
+
+        function getWordCount() {
+            headerText += ",app_desc_count";
+            var count = 0;
+            for(let i = 0; i < desc.length; i++) {
+                for(let j = 0; j < desc[i].length; j++) {
+                    if(desc[i].charAt(j) == " ") {
+                        count++;
+                    }
+                }
+                wordCount[i] = count;
+                count = 0;
+                insertColumnCell(i, wordCount);
+            }
+            var head = document.getElementById("header-row");
+            var newHeadCell = document.createElement("TH");
+            newHeadCell.innerHTML = "Desc. Word Count"
+            head.appendChild(newHeadCell);
+        }
+
+        //Goes through each description and checks to see if the word privacy is included 
+        //(Makes assumption this means there is a policy)
+        function checkForPrivacy() {
+            headerText += ",app_privacy";
+            for(let i = 0; i < desc.length; i++) {
+                var row = document.getElementById("row-" + i);
+                var colCell = row.insertCell();
+                //Find indexes of these words, will take the smallest (if -1 is returned, do not use it)
+                if(desc[i].includes("privacy") || desc[i].includes("PRIVACY") || desc[i].includes("Privacy")) {
+                    var indexp = desc[i].indexOf("privacy");
+                    if(indexp == -1) {
+                        indexp = 100000;
+                    }
+                    var indexP = desc[i].indexOf("PRIVACY");
+                    if(indexP == -1) {
+                        indexP = 100000;
+                    }
+                    var indexPr = desc[i].indexOf("Privacy");
+                    if(indexPr == -1) {
+                        indexPr = 100000;
+                    }
+                    console.log(appName[i]);
+                    console.log(indexp + " " + indexP + " " + indexPr);
+
+                    if(indexp < indexP && indexp < indexPr) {
+                        colCell.innerHTML = "\"" + desc[i].substring(indexp, desc[i].length);
+                        console.log(colCell.innerHTML);
+                    }
+                    else if(indexP < indexp && indexP < indexPr) {
+                        colCell.innerHTML = "\"" + desc[i].substring(indexP, desc[i].length);
+                    }
+                    else {
+                        colCell.innerHTML = "\"" + desc[i].substring(indexPr, desc[i].length);
+                    }
+                    privacy[privacy.length] = colCell.innerHTML;
+                    privacy[privacy.length-1] = privacy[privacy.length-1].trim();
+                }
+                else {
+                    privacy[privacy.length] = "N/A";
+                    colCell.innerHTML = "N/A";
+                }
+            }
+            var head = document.getElementById("header-row");
+            var newHeadCell = document.createElement("TH");
+            newHeadCell.innerHTML = "Privacy Policy"
+            head.appendChild(newHeadCell);
+        }
+
+        function removeStrangeCharacters() {
+            for(let i = 0; i < desc.length; i++) {
+                //Regex acquired from: https://www.geeksforgeeks.org/how-to-remove-all-non-ascii-characters-from-the-string-using-javascript/
+                desc[i] = desc[i].replace(/[^\x00-\x7F]/g, "");
+                console.log(desc[i]);
+                modifyColumnCell(i, desc);
+            }
+        } 
+
+        function insertColumnCell(num, dataStructure) {
+            var row = document.getElementById("row-" + num);
+            var colCell = row.insertCell();
+            colCell.innerHTML = dataStructure[num];
+        }
+
+        function modifyColumnCell(num, dataStructure) {
+            var cell = document.getElementById("data-table").rows[num+1].cells.item(2);
+            cell.innerHTML = dataStructure[num];
+        }
+
+        function generateExcelSheet() {
+            var fileName = "test-excel.csv";
+            var element = document.createElement('a');
+            var newExcelText = buildExcelString();
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(newExcelText));
+            element.setAttribute('download', fileName);
+
+            element.style.display = 'none';
+            document.body.appendChild(element);
+
+            element.click();
+
+            document.body.removeChild(element);
+        }
+
+        function buildExcelString() {
+            for(let i = 0; i < headerText.length; i++) {
+                console.log(headerText.charAt(i));
+            }
+            var txt = headerText + "\n";
+            for(let i = 0; i < appName.length; i++) {
+                txt += appName[i] + ",";
+                txt += rating[i] + ",";
+                txt += desc[i] + ",";
+                txt += img[i] + ",";
+                txt += contentRating[i] + ",";
+                txt += category[i] + ",";
+                txt += ageRating[i] + ",";
+                txt += price[i] + ",";
+                if(wordCount[i] != null) {
+                    txt += wordCount[i] + ",";
+                }
+                if(privacy[i] != null) {
+                    txt += privacy[i] + ",";
+                }
+            }
+            return txt;
+        }
+
+        //Function will contents of each array to the table
+        function printToTable() {
+            var row, c1, c2, c3, c4, c5, c6, c7, c8;
+
+            for(let i = 0; i < appName.length; i++) {
+                row = document.getElementById("data-table").insertRow();
+                row.setAttribute("id", "row-" + i);
+                c1 = row.insertCell();
+                c2 = row.insertCell();
+                c3 = row.insertCell();
+                c4 = row.insertCell();
+                c5 = row.insertCell();
+                c6 = row.insertCell();
+                c7 = row.insertCell();
+                c8 = row.insertCell();
+
+                c1.setAttribute('class', "td-width");
+                c2.setAttribute('class', "td-width");
+                c3.setAttribute('class', "td-width-desc");
+                c4.setAttribute('class', "td-width");
+                c5.setAttribute('class', "td-width");
+                c6.setAttribute('class', "td-width");
+                c7.setAttribute('class', "td-width");
+                c8.setAttribute('class', "td-width");
+
+                c1.innerHTML = appName[i];
+                c2.innerHTML = rating[i];
+                c3.innerHTML = desc[i];
+                c4.innerHTML = img[i];
+                c5.innerHTML = contentRating[i];
+                c6.innerHTML = category[i];
+                c7.innerHTML = ageRating[i];
+                c8.innerHTML = price[i];
+            }
+        }
+
+        //Manual
+        //Download Excel
+    </script>
+</html>
